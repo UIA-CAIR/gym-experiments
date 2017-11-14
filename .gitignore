@@ -1,0 +1,12 @@
+
+deeplinewars/rl/__pycache__/
+
+*.pyc
+
+*.iml
+
+*.pkl
+
+*.h5
+
+\.idea/
