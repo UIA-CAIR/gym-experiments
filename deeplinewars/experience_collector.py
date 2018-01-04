@@ -4,8 +4,11 @@ import gym_deeplinewars.envs
 import numpy
 import time
 
-env = gym.make('deeplinewars-shuffle-v0')
-env.set_representation("raw_enemy")
+#env = gym.make('deeplinewars-shuffle-v0')
+#env.set_representation("raw_enemy")
+env = gym.make('deeplinewars-stochastic-11x11-v0')
+env.set_representation("image_grayscale")
+
 action_space = env.action_space
 memories = []
 episodes = 1000
@@ -20,7 +23,7 @@ for episode in range(episodes):
 
     while not terminal:
         # Draw environment on screen
-        #env.render()  # For image you MUST call this
+        env.render()  # For image you MUST call this
 
         # Draw action from distribution
         a = random.randint(0, action_space-1)

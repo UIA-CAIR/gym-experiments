@@ -4,6 +4,13 @@ from deeplinewars.rl.Agent import Agent
 from deeplinewars.rl.models import cnn1, ddqn, capsule1, cnnrnn
 import matplotlib.pyplot as plt
 import numpy as np
+import tensorflow as tf
+from keras import backend as K
+config = tf.ConfigProto()
+config.gpu_options.allow_growth=True
+sess = tf.Session(config=config)
+K.set_session(sess)
+
 
 plot_loss = []
 plot_win_percent = []
@@ -11,13 +18,13 @@ plot_wins = []
 plot_losses = []
 plot_x_axis = []
 fig, ax = plt.subplots(nrows=2, ncols=2)
-
-
+episodes = 10000000
 
 env = gym.make('deeplinewars-stochastic-11x11-v0')
-env.set_representation("raw_enemy")
+env.set_representation("image_grayscale")
 
-model = cnn1.model(env.observation_space[1:], env.action_space, 1e-4)
+print(env.observation_space[1:], env.action_space)
+model = cnnrnn.model(env.observation_space[1:], env.action_space, 1e-4)
 agent = Agent(
     env.observation_space,
     env.action_space,
@@ -30,14 +37,6 @@ agent = Agent(
     discount=0.99,
     model=model
 )
-
-#for file in tqdm(glob.glob("./training_data/*.npy")):
-#    experiences = np.load(file)
-#    for experience in experiences:
-#        agent.memory.add(experience)
-
-
-episodes = 10000000
 
 victories = 0
 losses = 0
@@ -52,20 +51,25 @@ for episode in range(episodes):
 
     while not terminal:
         # Draw environment on screen
-        #env.render()  # For image you MUST call this
+        env.render()  # For image you MUST call this
 
         # Draw action from distribution
-        a = agent.act(s)
+
+        s_p = np.reshape(s, s.shape[1:])
+        s_p = np.array([[s_p]])
+        a = agent.act(s_p)
 
         # Perform action in environment
         s1, r, terminal, _ = env.step(a)
+
 
         # Add to replay buffer
         agent.memory.add((s, a, r, s1, terminal))
         s = s1
         tick += 1
 
-
+        if tick > 10000:
+            terminal = True
 
     if r <= 0:
         losses += 1
@@ -73,7 +77,8 @@ for episode in range(episodes):
         victories += 1
 
     for x in range(10):
-        agent.train()
+        agent.rnn_train()
+
 
     plot_loss.append(agent.loss())
     plot_win_percent.append(victories / (victories + losses))

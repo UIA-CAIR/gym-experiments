@@ -115,8 +115,6 @@ class Agent:
             targets[b] = m2.predict(s)
             targets[b, a] = target
 
-
-
         history = m1.fit(inputs, targets, epochs=1, callbacks=[], verbose=0)
         self.episode_loss += history.history["loss"][0]
 
