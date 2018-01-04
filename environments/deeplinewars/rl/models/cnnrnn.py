@@ -1,8 +1,9 @@
-from keras import Sequential
-from keras.layers import Conv2D, Flatten, Dense, LSTM, TimeDistributed
-from keras.layers.convolutional_recurrent import ConvLSTM2D
-from keras.optimizers import Adam
-from maze import util
+from tensorflow.python.keras.optimizers import Adam
+from tensorflow.python.keras.layers import ConvLSTM2D
+from tensorflow.python.keras.models import Sequential
+from tensorflow.python.layers.core import Flatten, Dense
+
+from util.loss_functions import huber_loss_1
 
 
 def model(state_size, action_size, learning_rate):
@@ -15,5 +16,5 @@ def model(state_size, action_size, learning_rate):
     model.add(Dense(1024, activation="relu"))
     model.add(Dense(action_size, activation="linear"))
 
-    model.compile(optimizer=Adam(lr=learning_rate), loss=util.huber_loss_1)
+    model.compile(optimizer=Adam(lr=learning_rate), loss=huber_loss_1)
     return model

@@ -1,8 +1,11 @@
-from keras import Model
-import keras.backend as K
-from keras.layers import Conv2D, Input, Reshape, Flatten, Dense, Lambda
-from keras.optimizers import Adam
-from keras.utils import plot_model
+from tensorflow.python.keras.backend import backend as K
+from tensorflow.python.keras import Input
+from tensorflow.python.keras.models import Model
+from tensorflow.python.keras.layers import Reshape, Lambda
+from tensorflow.python.keras.optimizers import Adam
+from tensorflow.python.keras.utils import plot_model
+from tensorflow.python.layers.convolutional import Conv2D
+from tensorflow.python.layers.core import Flatten, Dense
 
 
 def model(observation_space, action_space, lr):

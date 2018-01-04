@@ -1,7 +1,7 @@
 import gym
 import gym_deeplinewars.envs
-from deeplinewars.rl.Agent import Agent
-from deeplinewars.rl.models import cnn1, ddqn, capsule1, cnnrnn
+from environments.deeplinewars.rl.Agent import Agent
+from environments.deeplinewars.rl.models import cnn1, ddqn, capsule1, cnnrnn
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -52,7 +52,7 @@ for episode in range(episodes):
 
     while not terminal:
         # Draw environment on screen
-        #env.render()  # For image you MUST call this
+        env.render()  # For image you MUST call this
 
         # Draw action from distribution
         a = agent.act(s)

@@ -1,9 +1,9 @@
-from keras import Input, Model
-from keras.layers import Conv2D
-from keras.optimizers import Adam
+from tensorflow.python.keras import Input
+from tensorflow.python.keras.models import Model
+from tensorflow.python.keras.optimizers import Adam
+from tensorflow.python.layers.convolutional import Conv2D
 
-from maze import util
-from maze.util import PrimaryCap, CapsuleLayer, Length
+from util.loss_functions import huber_loss_1
 
 
 def model(state_size, action_size, learning_rate):
@@ -16,5 +16,5 @@ def model(state_size, action_size, learning_rate):
     out_caps = Length(name='out_caps')(digitcaps)
 
     model = Model(inputs=[x], outputs=[out_caps])
-    model.compile(optimizer=Adam(lr=learning_rate), loss=util.huber_loss_1)
+    model.compile(optimizer=Adam(lr=learning_rate), loss=huber_loss_1)
     return model, "capsule1"
