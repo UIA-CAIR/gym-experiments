@@ -1,21 +1,57 @@
 import os
 import random
 import numpy as np
+import os
 
-from tensorflow.contrib.keras.python.keras import backend as K
-from tensorflow.contrib.keras.python.keras.models import load_model
-from tensorflow.contrib.keras.python.keras.optimizers import Adam
-from tensorflow.contrib.keras.python.keras.engine import Input, Model
-from tensorflow.contrib.keras.python.keras.utils.vis_utils import plot_model
-from tensorflow.contrib.keras.python.keras.layers.convolutional import Conv2D
-from tensorflow.contrib.keras.python.keras.layers.core import Flatten, Dense, Lambda, Reshape
-from deeplinewars.rl.Memory import Memory
+from tensorflow import Session, ConfigProto
+from tensorflow.python.keras import backend as K
+from tensorflow.python.keras._impl.keras.callbacks import CSVLogger
+from tensorflow.python.keras._impl.keras.optimizers import Adam
+
+from msc.dqn.callbacks import ModelIntervalCheckpoint
+
+K.set_session(Session(config=ConfigProto(inter_op_parallelism_threads=2)))
+
+from msc.dqn.models import cnn
+
+dir_path = os.path.dirname(os.path.realpath(__file__))
+
+
+
+class Memory:
+
+    def __init__(self, memory_size):
+        self.buffer = []
+        self.count = 0
+        self.max_memory_size = memory_size
+
+    def _recalibrate(self):
+        self.count = len(self.buffer)
+
+    def remove_n(self, n):
+        self.buffer = self.buffer[n-1:-1]
+        self._recalibrate()
+
+    def add(self, memory):
+        self.buffer.append(memory)
+        self.count += 1
+
+        if self.count > self.max_memory_size:
+            self.buffer.pop(0)
+            self.count -= 1
+
+    def get(self, batch_size=1):
+        if self.count <= batch_size:
+            return np.array(self.buffer)
+
+        return np.array(random.sample(self.buffer, batch_size))
 
 
 class Agent:
     def __init__(self,
                  observation_space,
                  action_space,
+                 model,
                  lr=1e-4,
                  memory_size=10000000,
                  e_start=1.0,
@@ -23,21 +59,21 @@ class Agent:
                  e_steps=100000,
                  batch_size=16,
                  discount=0.99,
-                 model=None,
-                 ddqn=False
+                 use_double=False,
                  ):
-        os.makedirs("./output", exist_ok=True)
-        os.makedirs("./save", exist_ok=True)
 
-        self.ddqn = ddqn
+        # File definitions
+        self.checkpoint_file = os.path.join(dir_path, "checkpoint.hdf5")
+        self.logger_file = os.path.join(dir_path, "log.csv")
 
+        self.use_double = use_double
 
         self.observation_space = observation_space
         self.action_space = action_space
 
         self.memory = Memory(memory_size)
 
-        # Parameters
+        # Hyperparameters
         self.LEARNING_RATE = lr
         self.BATCH_SIZE = batch_size
         self.GAMMA = discount
@@ -48,95 +84,51 @@ class Agent:
         self.EPSILON_DECAY = (self.EPSILON_END - self.EPSILON_START) / e_steps
         self.epsilon = self.EPSILON_START
 
-        self.episode_loss = 0
-        self.episode_train_count = 0
+        self.model = model(self.observation_space, self.action_space, self.LEARNING_RATE)
+        self.target_model = model(self.observation_space, self.action_space, self.LEARNING_RATE) if self.use_double else None
 
-        self.model = model
+        # Compile models
+        optimizer = Adam(lr=self.LEARNING_RATE)
+        loss = "mse"
+        metrics = ["accuracy"]
+        self.model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
+        if self.use_double:
+            self.target_model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
 
-        if self.ddqn:
-            self.target_model = self.build_model()
 
-        self.model.summary()
-        print("State size is: %s,%s,%s,%s" % self.observation_space)
+
+        # Callbacks
+        checkpoint = ModelIntervalCheckpoint(self.checkpoint_file, interval=50, verbose=1)
+        logger = CSVLogger(self.logger_file, separator=',', append=True)
+        self.model_callbacks = [checkpoint, logger]
+
+        print("State size is: %s,%s,%s" % self.observation_space)
         print("Action size is: %s" % self.action_space)
         print("Batch size is: %s " % self.BATCH_SIZE)
 
     def reset(self):
-        self.episode_loss = 0
-        self.episode_train_count = 0
+        pass
 
     def update_target_model(self):
         # copy weights from model to target_model
         self.target_model.set_weights(self.model.get_weights())
 
-    def build_model(self):
-        raise Exception("implement model!")
-
-    def load(self, name):
-        self.model = load_model(name)
-        self.target_model = load_model(name)
-
-    def save(self, name):
-        self.target_model.save(name)
-
-    def rnn_train(self):
-        if self.memory.count < self.BATCH_SIZE:
-            return
-
-        m1 = self.model
-        m2 = self.target_model if self.ddqn else self.model
-
-        RNN_BATCH = 8
-        inputs = np.zeros(((self.BATCH_SIZE, RNN_BATCH,) + self.observation_space[1:]))
-        targets = np.zeros((self.BATCH_SIZE, self.action_space))
-
-        for b in range(self.BATCH_SIZE):
-
-            start_idx = random.randint(0, len(self.memory.buffer) - RNN_BATCH - 2)
-            end_idx = start_idx + RNN_BATCH
-
-            for idx, (s, a, r, s1, t) in enumerate(self.memory.buffer[start_idx:end_idx]):
-                s_p = np.reshape(s1, s1.shape[1:])
-                s_p = np.array([[s_p]])
-                inputs[b, idx] = s_p
-
-            s, a, r, s1, t = self.memory.buffer[end_idx + 1]
-            s = np.reshape(s, s.shape[1:])
-            s = np.array([[s]])
-
-            s1 = np.reshape(s1, s1.shape[1:])
-            s1 = np.array([[s1]])
-            target = r
-
-            if not t:
-                tar_s1 = m2.predict(s1)
-                target = r + self.GAMMA * np.amax(tar_s1[0])
-
-            targets[b] = m2.predict(s)
-            targets[b, a] = target
-
-        history = m1.fit(inputs, targets, epochs=1, callbacks=[], verbose=0)
-        self.episode_loss += history.history["loss"][0]
-
-        self.episode_train_count += 1
-
-        if self.ddqn and self.episode_train_count % 50 == 0:
-            self.update_target_model()
-
     def train(self):
         if self.memory.count < self.BATCH_SIZE:
             return
 
+        # Define which models to do updates on
         m1 = self.model
-        m2 = self.target_model if self.ddqn else self.model
+        m2 = self.target_model if self.use_double else self.model
 
-        inputs = np.zeros(((self.BATCH_SIZE,) + self.observation_space[1:]))
+        # Define inputs to model, and which targets (outputs) to predict
+        inputs = np.zeros(((self.BATCH_SIZE,) + self.observation_space))
         targets = np.zeros((self.BATCH_SIZE, self.action_space))
 
-        for i, j in enumerate(self.memory.get(self.BATCH_SIZE)):
-            s, a, r, s1, terminal = j
 
+        for i, (s, a, r, s1, terminal) in enumerate(self.memory.get(self.BATCH_SIZE)):
             target = r
+
 
             if not terminal:
                 tar_s1 = m2.predict(s1)
@@ -146,16 +138,10 @@ class Agent:
             targets[i, a] = target
             inputs[i] = s
 
-        history = m1.fit(inputs, targets, epochs=1, callbacks=[], verbose=0)
-        self.episode_loss += history.history["loss"][0]
+        history = m1.fit(inputs, targets, epochs=1, callbacks=self.model_callbacks, verbose=0)
 
-        self.episode_train_count += 1
-
-        if self.ddqn and self.episode_train_count % 50 == 0:
-            self.update_target_model()
-
-    def loss(self):
-        return 0 if self.episode_train_count == 0 else self.episode_loss / self.episode_train_count
+        #if self.ddqn and self.episode_train_count % 50 == 0:
+        #    self.update_target_model()
 
     def act(self, state):
         self.epsilon = max(self.EPSILON_END, self.epsilon + self.EPSILON_DECAY)
@@ -165,9 +151,22 @@ class Agent:
             return random.randrange(self.action_space)
 
         # Exploit Q-Knowledge
-        if self.ddqn:
-            act_values = self.target_model.predict(state)
-        else:
-            act_values = self.model.predict(state)
+        act_values = self.target_model.predict(state) if self.use_double else self.model.predict(state)
 
         return np.argmax(act_values[0])
+
+
+if __name__ == "__main__":
+    agent = Agent((84, 84, 1), 4, cnn)
+
+    for x in range(1000):
+        agent.memory.add((
+            np.zeros((1, 84, 84, 1)),
+            random.randint(0, 3),
+            random.randrange(-1, 1),
+            np.zeros((1, 84, 84, 1)),
+            False
+        ))
+
+    for x in range(10000):
+        agent.train()
