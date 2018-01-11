@@ -8,7 +8,7 @@ from tensorflow.python.keras import backend as K
 from tensorflow.python.keras._impl.keras.callbacks import CSVLogger
 from tensorflow.python.keras._impl.keras.optimizers import Adam
 
-from msc.dqn.callbacks import ModelIntervalCheckpoint
+from msc.dqn.callbacks import ModelIntervalCheckpoint, TargetModelUpdateCallback
 
 K.set_session(Session(config=ConfigProto(inter_op_parallelism_threads=2)))
 
@@ -59,7 +59,7 @@ class Agent:
                  e_steps=100000,
                  batch_size=16,
                  discount=0.99,
-                 use_double=False,
+                 use_double=True,
                  ):
 
         # File definitions
@@ -84,6 +84,7 @@ class Agent:
         self.EPSILON_DECAY = (self.EPSILON_END - self.EPSILON_START) / e_steps
         self.epsilon = self.EPSILON_START
 
+        self.model_callbacks = []
         self.model = model(self.observation_space, self.action_space, self.LEARNING_RATE)
         self.target_model = model(self.observation_space, self.action_space, self.LEARNING_RATE) if self.use_double else None
 
@@ -93,14 +94,13 @@ class Agent:
         metrics = ["accuracy"]
         self.model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
         if self.use_double:
+            target_updater  = TargetModelUpdateCallback(self.target_model, 5, verbose=1)
             self.target_model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
-
-
+            self.model_callbacks.append(target_updater)
 
         # Callbacks
-        checkpoint = ModelIntervalCheckpoint(self.checkpoint_file, interval=50, verbose=1)
-        logger = CSVLogger(self.logger_file, separator=',', append=True)
-        self.model_callbacks = [checkpoint, logger]
+        self.model_callbacks.append(ModelIntervalCheckpoint(self.checkpoint_file, interval=50, verbose=1))
+        self.model_callbacks.append(CSVLogger(self.logger_file, separator=',', append=True))
 
         print("State size is: %s,%s,%s" % self.observation_space)
         print("Action size is: %s" % self.action_space)

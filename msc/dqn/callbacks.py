@@ -12,7 +12,7 @@ class Callback(KerasCallback):
 
     """
     def __init__(self):
-        super().__init__()
+        super(Callback, self).__init__()
         self.duration = 0
         self._start = None
         self.epoch = 0
@@ -31,16 +31,34 @@ class ModelIntervalCheckpoint(Callback):
         self.filepath = filepath
         self.interval = interval
         self.verbose = verbose
-        self.total_steps = 0
 
     def on_train_end(self, logs={}):
         super().on_train_end(logs)
-        self.total_steps += 1
-        if self.total_steps % self.interval != 0:
+        if self.epoch % self.interval != 0:
             # Nothing to do.
             return
 
-        filepath = self.filepath.format(step=self.total_steps, **logs)
+        filepath = self.filepath.format(step=self.epoch, **logs)
         if self.verbose > 0:
-            print('Step {}: saving model to {}'.format(self.total_steps, filepath))
+            print('Step %s: Saving model to %s' % (self.epoch, filepath))
+
         self.model.save_weights(filepath, overwrite=True)
+
+
+class TargetModelUpdateCallback(Callback):
+    def __init__(self, target, interval, verbose=0):
+        super(TargetModelUpdateCallback, self).__init__()
+        self.target_model = target
+        self.interval = interval
+        self.verbose = verbose
+        self.last_update = 0
+
+    def on_train_end(self, logs={}):
+        super().on_train_end(logs)
+
+        if self.epoch % self.interval == 0:
+            self.target_model.set_weights(self.model.get_weights())
+
+            if self.verbose > 0:
+                print("Epoch %s: Updating Target model from epoch %s to %s" % (self.epoch, self.last_update, self.epoch))
+            self.last_update = self.epoch
