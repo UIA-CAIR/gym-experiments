@@ -5,6 +5,9 @@ source ../venv/bin/activate
 
 pip3 install --upgrade matplotlib
 pip3 install --upgrade tensorflow-gpu
+pip3 install --upgrade tqdm
+pip3 install --upgrade pydot
+pip3 install --upgrade git+https://github.com/UIA-CAIR/py_image_stitcher.git
 pip3 install --upgrade git+https://github.com/UIA-CAIR/gym-deeplinewars.git
 pip3 install --upgrade git+https://github.com/UIA-CAIR/gym-deeprts.git
 pip3 install --upgrade git+https://github.com/CAIR-UIA/gym-maze.git
