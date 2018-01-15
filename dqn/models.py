@@ -1,22 +1,35 @@
-from tensorflow.python.keras.layers import Activation
+from tensorflow.python.keras import Input
+from tensorflow.python.keras._impl.keras.engine import Model
+from tensorflow.python.keras.layers import Activation, ConvLSTM2D
 from tensorflow.python.keras.models import Sequential
 from tensorflow.python.keras.optimizers import Adam
 from tensorflow.python.layers.convolutional import Conv2D
 from tensorflow.python.layers.core import Flatten, Dense
 
+from util.capsules.layers import PrimaryCap, CapsuleLayer, Length
 
-def capsnet(state_size, action_size, learning_rate):
-    n_routing = 3
+
+def capsnet(state_size, action_size):
+    routings = 3
 
     x = Input(shape=state_size)
-    conv1 = Conv2D(filters=256, kernel_size=1, strides=1, padding='valid', activation='relu', name='conv1')(x)
-    primarycaps = PrimaryCap(conv1, dim_vector=8, n_channels=32, kernel_size=9, strides=2, padding='valid')
-    digitcaps = CapsuleLayer(num_capsule=action_size, dim_vector=16, num_routing=n_routing, name='digitcaps')(primarycaps)
-    out_caps = Length(name='out_caps')(digitcaps)
 
+    # Layer 1: Just a conventional Conv2D layer
+    conv1 = Conv2D(64, (4, 4), strides=(2, 2), activation=Activation("relu"))(x)
+    #conv2 = Conv2D(64, (3, 3), strides=(2, 2), activation=Activation("relu"))(conv1)
+
+    # Layer 2: Conv2D layer with `squash` activation, then reshape to [None, num_capsule, dim_capsule]
+    primarycaps = PrimaryCap(conv1, dim_capsule=8, n_channels=32, kernel_size=9, strides=2, padding='valid')
+
+    # Layer 3: Capsule layer. Routing algorithm works here.
+    digitcaps = CapsuleLayer(num_capsule=action_size, dim_capsule=16, routings=routings,
+                             name='digitcaps')(primarycaps)
+
+    # Layer 4: This is an auxiliary layer to replace each capsule with its length. Just to match the true label's shape.
+    # If using tensorflow, this will not be necessary. :)
+    out_caps = Length(name='capsnet')(digitcaps)
     model = Model(inputs=[x], outputs=[out_caps])
-    model.compile(optimizer=Adam(lr=learning_rate), loss=util.huber_loss_1)
-    return model, "capsule1"
+    return model
 
 
 def cnn_dualing(observation_space, action_space, lr):
@@ -48,7 +61,7 @@ def cnn_dualing(observation_space, action_space, lr):
     return model
 
 
-def cnn(state_size, action_size, learning_rate):
+def cnn(state_size, action_size):
     model = Sequential()
     model.add(Conv2D(32, (1, 1), strides=(1, 1), activation=Activation("relu"), input_shape=state_size))
     model.add(Conv2D(32, (1, 1), strides=(1, 1), activation=Activation("relu")))
@@ -58,14 +71,14 @@ def cnn(state_size, action_size, learning_rate):
     model.add(Dense(action_size, activation=Activation("linear")))
     return model
 
-def cnn_rnn(state_size, action_size, learning_rate):
-    model = Sequential()
-    model.add(ConvLSTM2D(64, (1, 1), return_sequences=True, strides=(1, 1), data_format="channels_first", activation="relu", input_shape=(None, 2, 11, 11)))
-    model.add(ConvLSTM2D(64, (1, 1), return_sequences=True, strides=(1, 1), data_format="channels_first", activation="relu"))
-    model.add(ConvLSTM2D(64, (1, 1), return_sequences=False, strides=(1, 1), data_format="channels_first", activation="relu"))
-    model.add(Flatten())
-    model.add(Dense(1024, activation="relu"))
-    model.add(Dense(action_size, activation="linear"))
 
-    model.compile(optimizer=Adam(lr=learning_rate), loss=util.huber_loss_1)
+def cnn_rnn(state_size, action_size):
+
+    model = Sequential()
+    model.add(ConvLSTM2D(64, (1, 1), return_sequences=True, strides=(1, 1), activation=Activation("relu"), input_shape=(4, ) + state_size))
+    model.add(ConvLSTM2D(64, (1, 1), return_sequences=True, strides=(1, 1), activation=Activation("relu")))
+    model.add(ConvLSTM2D(64, (1, 1), return_sequences=False, strides=(1, 1), activation=Activation("relu")))
+    model.add(Flatten())
+    model.add(Dense(1024, activation=Activation("relu")))
+    model.add(Dense(action_size, activation=Activation("linear")))
     return model

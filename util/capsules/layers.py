@@ -7,12 +7,15 @@ uncommenting them and commenting their counterparts.
 Author: Xifeng Guo, E-mail: `guoxifeng1990@163.com`, Github: `https://github.com/XifengGuo/CapsNet-Keras`
 """
 import tensorflow as tf
-from tensorflow.contrib.layers.python.layers import initializers
-from tensorflow.python.keras.backend import backend as K
-from tensorflow.python.layers import layers
+
+from keras import backend as K
+from tensorflow.python.keras import initializers
+from tensorflow.python.keras._impl.keras.engine import Layer
+from tensorflow.python.keras.layers import Reshape, Lambda
+from tensorflow.python.layers.convolutional import Conv2D
 
 
-class Length(layers.Layer):
+class Length(Layer):
     """
     Compute the length of vectors. This is used to compute a Tensor that has the same shape with y_true in margin_loss.
     Using this layer as model's output can directly predict labels by using `y_pred = np.argmax(model.predict(x), 1)`
@@ -26,7 +29,7 @@ class Length(layers.Layer):
         return input_shape[:-1]
 
 
-class Mask(layers.Layer):
+class Mask(Layer):
     """
     Mask a Tensor with shape=[None, num_capsule, dim_vector] either by the capsule with max length or by an additional
     input mask. Except the max-length capsule (or specified capsule), all vectors are masked to zeros. Then flatten the
@@ -76,7 +79,7 @@ def squash(vectors, axis=-1):
     return scale * vectors
 
 
-class CapsuleLayer(layers.Layer):
+class CapsuleLayer(Layer):
     """
     The capsule layer. It is similar to Dense layer. Dense layer has `in_num` inputs, each is a scalar, the output of the
     neuron from the former layer, and it has `out_num` output neurons. CapsuleLayer just expand the output of the neuron
@@ -166,10 +169,10 @@ def PrimaryCap(inputs, dim_capsule, n_channels, kernel_size, strides, padding):
     :param n_channels: the number of types of capsules
     :return: output tensor, shape=[None, num_capsule, dim_capsule]
     """
-    output = layers.Conv2D(filters=dim_capsule*n_channels, kernel_size=kernel_size, strides=strides, padding=padding,
+    output = Conv2D(filters=dim_capsule*n_channels, kernel_size=kernel_size, strides=strides, padding=padding,
                            name='primarycap_conv2d')(inputs)
-    outputs = layers.Reshape(target_shape=[-1, dim_capsule], name='primarycap_reshape')(output)
-    return layers.Lambda(squash, name='primarycap_squash')(outputs)
+    outputs = Reshape(target_shape=[-1, dim_capsule], name='primarycap_reshape')(output)
+    return Lambda(squash, name='primarycap_squash')(outputs)
 
 
 """

@@ -13,7 +13,6 @@ plot_x_axis = []
 fig, ax = plt.subplots(nrows=2, ncols=2)
 
 
-
 env = gym.make('deeplinewars-stochastic-11x11-v0')
 env.set_representation("raw_enemy")
 

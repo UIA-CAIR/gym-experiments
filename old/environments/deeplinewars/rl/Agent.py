@@ -8,7 +8,6 @@ from ..rl.Memory import Memory
 
 
 
-
 class Agent:
     def __init__(self,
                  observation_space,
@@ -27,8 +26,6 @@ class Agent:
         os.makedirs("./save", exist_ok=True)
 
         self.ddqn = ddqn
-
-
         self.observation_space = observation_space
         self.action_space = action_space
 

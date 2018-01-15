@@ -1,21 +1,17 @@
-import os
 import random
 import numpy as np
 import os
 
 from tensorflow import Session, ConfigProto
 from tensorflow.python.keras import backend as K
-from tensorflow.python.keras._impl.keras.callbacks import CSVLogger
-from tensorflow.python.keras._impl.keras.optimizers import Adam
+from tensorflow.python.keras.callbacks import CSVLogger
+from tensorflow.python.keras.optimizers import Adam
 
-from msc.dqn.callbacks import ModelIntervalCheckpoint, TargetModelUpdateCallback
+from dqn.callbacks import ModelIntervalCheckpoint, TargetModelUpdateCallback, LossCallback
 
 K.set_session(Session(config=ConfigProto(inter_op_parallelism_threads=2)))
 
-from msc.dqn.models import cnn
-
 dir_path = os.path.dirname(os.path.realpath(__file__))
-
 
 
 class Memory:
@@ -53,12 +49,14 @@ class Agent:
                  action_space,
                  model,
                  lr=1e-4,
+                 exploration_episodes=50,
                  memory_size=10000000,
                  e_start=1.0,
                  e_end=0.0,
                  e_steps=100000,
                  batch_size=16,
                  discount=0.99,
+                 load_checkpoint=True,
                  use_double=True,
                  ):
 
@@ -84,9 +82,23 @@ class Agent:
         self.EPSILON_DECAY = (self.EPSILON_END - self.EPSILON_START) / e_steps
         self.epsilon = self.EPSILON_START
 
+        self.loss = None
+        self.epoch = 0
+
         self.model_callbacks = []
-        self.model = model(self.observation_space, self.action_space, self.LEARNING_RATE)
-        self.target_model = model(self.observation_space, self.action_space, self.LEARNING_RATE) if self.use_double else None
+        self.model = model(self.observation_space, self.action_space)
+        self.target_model = model(self.observation_space, self.action_space) if self.use_double else None
+
+        if load_checkpoint:
+            try:
+                self.model.load_weights(self.checkpoint_file)
+            except OSError:
+                pass
+
+            try:
+                self.target_model.load_weights(self.checkpoint_file)
+            except OSError:
+                pass
 
         # Compile models
         optimizer = Adam(lr=self.LEARNING_RATE)
@@ -101,6 +113,10 @@ class Agent:
         # Callbacks
         self.model_callbacks.append(ModelIntervalCheckpoint(self.checkpoint_file, interval=50, verbose=1))
         self.model_callbacks.append(CSVLogger(self.logger_file, separator=',', append=True))
+        self.model_callbacks.append(LossCallback(interval=5))
+
+        self.episode = 1
+        self.exploration_episodes = exploration_episodes
 
         print("State size is: %s,%s,%s" % self.observation_space)
         print("Action size is: %s" % self.action_space)
@@ -108,6 +124,9 @@ class Agent:
 
     def reset(self):
         pass
+
+    def next_episode(self):
+        self.episode += 1
 
     def update_target_model(self):
         # copy weights from model to target_model
@@ -125,10 +144,8 @@ class Agent:
         inputs = np.zeros(((self.BATCH_SIZE,) + self.observation_space))
         targets = np.zeros((self.BATCH_SIZE, self.action_space))
 
-
         for i, (s, a, r, s1, terminal) in enumerate(self.memory.get(self.BATCH_SIZE)):
             target = r
-
 
             if not terminal:
                 tar_s1 = m2.predict(s1)
@@ -139,6 +156,8 @@ class Agent:
             inputs[i] = s
 
         history = m1.fit(inputs, targets, epochs=1, callbacks=self.model_callbacks, verbose=0)
+        self.loss = history.history["loss"][0]
+        self.epoch += 1
 
         #if self.ddqn and self.episode_train_count % 50 == 0:
         #    self.update_target_model()
@@ -147,7 +166,7 @@ class Agent:
         self.epsilon = max(self.EPSILON_END, self.epsilon + self.EPSILON_DECAY)
 
         # Epsilon exploration
-        if np.random.uniform() <= self.epsilon:
+        if np.random.uniform() <= self.epsilon or self.episode < self.exploration_episodes:
             return random.randrange(self.action_space)
 
         # Exploit Q-Knowledge

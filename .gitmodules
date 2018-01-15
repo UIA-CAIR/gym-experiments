@@ -1,0 +1,3 @@
+[submodule "environments/DeepLineWars"]
+	path = environments/DeepLineWars
+	url = git@github.com:UIA-CAIR/DeepLineWars.git

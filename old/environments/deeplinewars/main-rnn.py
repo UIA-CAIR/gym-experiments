@@ -1,11 +1,13 @@
 import gym
 import gym_deeplinewars.envs
-from deeplinewars.rl.Agent import Agent
-from deeplinewars.rl.models import cnn1, ddqn, capsule1, cnnrnn
 import matplotlib.pyplot as plt
 import numpy as np
 import tensorflow as tf
 from keras import backend as K
+
+from old.environments.deeplinewars.rl.Agent import Agent
+from old.environments.deeplinewars.rl.models import cnnrnn
+
 config = tf.ConfigProto()
 config.gpu_options.allow_growth=True
 sess = tf.Session(config=config)
@@ -32,7 +34,7 @@ agent = Agent(
     memory_size=100000,
     e_start=1.0,
     e_end=0.0,
-    e_steps=1000000,
+    e_steps=10000,
     batch_size=16,
     discount=0.99,
     model=model
@@ -57,6 +59,7 @@ for episode in range(episodes):
 
         s_p = np.reshape(s, s.shape[1:])
         s_p = np.array([[s_p]])
+        print(s_p.shape)
         a = agent.act(s_p)
 
         # Perform action in environment
